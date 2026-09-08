@@ -1,0 +1,143 @@
+import SwiftUI
+
+struct IslandRootView: View {
+    @EnvironmentObject private var session: AppSession
+    @Namespace private var islandNS
+
+    var body: some View {
+        GeometryReader { proxy in
+            let metrics = session.geometry.metrics
+            let size = currentSize(metrics)
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                island(size: size, metrics: metrics)
+                    .frame(width: size.width, height: size.height, alignment: .top)
+                Spacer(minLength: 0)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+        }
+        .background(Color.clear)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            session.island.setHover(hovering)
+        }
+        .contextMenu {
+            IslandContextMenu()
+                .environmentObject(session)
+        }
+        .onAppear {
+            session.settings.syncMotionConstants()
+        }
+    }
+
+    @ViewBuilder
+    private func island(size: CGSize, metrics: NotchMetrics) -> some View {
+        let state = session.island.visualState
+        ZStack {
+            IslandChrome(
+                size: size,
+                metrics: metrics,
+                state: state,
+                glow: session.music.snapshot?.accent ?? Color.white.opacity(0.2),
+                glowPulse: session.tempo.pulse
+            )
+            IslandContentView(namespace: islandNS)
+                .padding(.horizontal, state == .expanded ? 18 : 8)
+                .padding(.top, state == .expanded ? metrics.notchHeight + 8 : 0)
+        }
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: state == .idle ? size.height / 2 : 28, style: .continuous))
+        .shadow(color: .black.opacity(state == .idle && !metrics.isFallbackPill ? 0 : 0.35), radius: 18, y: 8)
+        .opacity(state == .idle && !metrics.isFallbackPill ? 0.02 : 1)
+    }
+
+    private func currentSize(_ metrics: NotchMetrics) -> CGSize {
+        switch session.island.visualState {
+        case .idle:
+            return metrics.idleSize
+        case .compact:
+            return metrics.compactSize
+        case .expanded:
+            return metrics.expandedSize
+        }
+    }
+}
+
+struct IslandContentView: View {
+    var namespace: Namespace.ID
+    @EnvironmentObject private var session: AppSession
+
+    var body: some View {
+        let state = session.island.visualState
+        if let transient = session.island.transient {
+            TransientHostView(event: transient, state: state, namespace: namespace)
+        } else if session.music.snapshot != nil {
+            NowPlayingView(namespace: namespace)
+        } else if state == .idle {
+            Color.clear
+        } else {
+            PlaceholderIslandView(state: state)
+        }
+    }
+}
+
+struct PlaceholderIslandView: View {
+    var state: IslandState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(Color.white.opacity(0.85)).frame(width: 18, height: 18)
+            if state != .idle {
+                Capsule().fill(Color.white.opacity(0.35)).frame(height: 8)
+            }
+            if state == .expanded {
+                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 6) {
+                    Capsule().fill(Color.white.opacity(0.5)).frame(width: 120, height: 8)
+                    Capsule().fill(Color.white.opacity(0.25)).frame(width: 80, height: 8)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+}
+
+struct TransientHostView: View {
+    var event: TransientEvent
+    var state: IslandState
+    var namespace: Namespace.ID
+    @EnvironmentObject private var session: AppSession
+
+    var body: some View {
+        switch event {
+        case .volume(let level, let muted):
+            HUDMeterView(symbol: muted ? "speaker.slash.fill" : "speaker.wave.3.fill", value: CGFloat(level))
+        case .brightness(let value):
+            HUDMeterView(symbol: "sun.max.fill", value: CGFloat(value))
+        case .charging(let percent, let isCharging):
+            ChargingView(percent: percent, isCharging: isCharging)
+        case .screenshot(let url):
+            ScreenshotCard(url: url)
+        case .liveActivity(let payload):
+            LiveActivityView(payload: payload)
+        case .download(let status):
+            DownloadView(status: status)
+        case .meeting(let payload):
+            MeetingJoinView(payload: payload)
+        case .clipboard:
+            ClipboardRingView()
+        case .focus(let progress):
+            FocusArcView(progress: progress)
+        case .privacy(let status):
+            PrivacyView(status: status)
+        case .exclusivity(let alert):
+            ExclusivityAlertView(alert: alert)
+        case .devices:
+            OutputDeviceView()
+        case .mixer:
+            AppMixerView()
+        case .sleepTimer(let remaining, let total):
+            SleepTimerView(remaining: remaining, total: total)
+        }
+    }
+}
