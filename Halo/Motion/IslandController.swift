@@ -13,22 +13,15 @@ final class IslandController: ObservableObject {
 
     private var dismissTask: Task<Void, Never>?
     private var sequenceTask: Task<Void, Never>?
-    private var loginHold = true
 
     init(session: AppSession) {
         self.session = session
     }
 
-    func start() {
-        Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard let self else { return }
-            self.loginHold = false
-            self.recomputeState()
-        }
-    }
+    func start() {}
 
     func setHover(_ hovering: Bool) {
+        guard isHovering != hovering else { return }
         isHovering = hovering
         recomputeState()
     }
@@ -65,9 +58,6 @@ final class IslandController: ObservableObject {
     private func targetState() -> IslandState {
         if isHovering {
             return .expanded
-        }
-        if loginHold {
-            return .idle
         }
         if let transient, transient.prefersExpanded {
             return .expanded

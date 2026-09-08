@@ -207,23 +207,27 @@ struct IslandChrome: View {
         let threshold = MotionConstants.gooThreshold
         let smoothness = MotionConstants.gooSmoothness
         return ZStack {
-            GooThresholdView(
-                blobs: blobs,
-                blur: blur,
-                threshold: threshold,
-                smoothness: smoothness
-            )
-            .colorMultiply(Color.black)
-            chromeShape
-                .fill(
-                    RadialGradient(
-                        colors: [glow.opacity(0.45 * glowPulse), .clear],
-                        center: .center,
-                        startRadius: 4,
-                        endRadius: max(size.width, size.height)
-                    )
+            if state == .idle {
+                chromeShape.fill(Color.black)
+            } else {
+                GooThresholdView(
+                    blobs: blobs,
+                    blur: blur,
+                    threshold: threshold,
+                    smoothness: smoothness
                 )
-                .blendMode(.plusLighter)
+                .colorMultiply(Color.black)
+                chromeShape
+                    .fill(
+                        RadialGradient(
+                            colors: [glow.opacity(0.45 * glowPulse), .clear],
+                            center: .center,
+                            startRadius: 4,
+                            endRadius: max(size.width, size.height)
+                        )
+                    )
+                    .blendMode(.plusLighter)
+            }
         }
         .frame(width: size.width, height: size.height)
         .allowsHitTesting(false)

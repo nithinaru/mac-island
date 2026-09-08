@@ -21,7 +21,7 @@ final class SettingsStore: ObservableObject {
     @AppStorage("edgeScrubbing") var edgeScrubbing: Bool = true
     @AppStorage("bpmBreathing") var bpmBreathing: Bool = true
     @AppStorage("reactiveWaveform") var reactiveWaveform: Bool = true
-    @AppStorage("menuBarItem") var menuBarItem: Bool = false
+    @AppStorage("menuBarItem") var menuBarItem: Bool = true
     @AppStorage("launchAtLogin") var launchAtLogin: Bool = false
     @AppStorage("liveActivityPort") var liveActivityPort: Int = 18473
     @AppStorage("gooBlur") var gooBlur: Double = 14

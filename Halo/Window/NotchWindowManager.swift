@@ -8,6 +8,11 @@ final class NotchWindowManager: NSObject {
     private var hosting: NSView?
     private var tracking: NSTrackingArea?
     private var started = false
+    private lazy var mouseMonitor = NotchMouseMonitor(session: session)
+
+    func setClickThrough(_ clickThrough: Bool) {
+        window?.ignoresMouseEvents = clickThrough
+    }
 
     init(session: AppSession) {
         self.session = session
@@ -21,6 +26,7 @@ final class NotchWindowManager: NSObject {
         }
         started = true
         rebuild()
+        mouseMonitor.start()
 
         NotificationCenter.default.addObserver(
             self,
@@ -63,9 +69,10 @@ final class NotchWindowManager: NSObject {
             display: true
         )
         host.frame = CGRect(origin: .zero, size: metrics.windowSize)
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true
         panel.orderFrontRegardless()
         installTracking()
+        mouseMonitor.handle(nil)
     }
 
     private func tearDownWindow() {

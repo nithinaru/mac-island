@@ -43,7 +43,7 @@ struct IslandRootView: View {
         .clipShape(islandClipShape(size: size, metrics: metrics, state: state))
         .contentShape(islandClipShape(size: size, metrics: metrics, state: state))
         .shadow(color: .black.opacity(idleOnHardware ? 0 : 0.35), radius: 18, y: 8)
-        .opacity(idleOnHardware ? 0.02 : 1)
+        .opacity(1)
         .modifier(EdgeScrubber())
         .onHover { hovering in
             session.island.setHover(hovering)

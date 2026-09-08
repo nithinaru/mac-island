@@ -54,8 +54,22 @@ final class AppSession: ObservableObject {
         downloads.start()
         meetings.start()
         mixer.start()
+        settings.menuBarItem = true
         menuBar.start()
         loginItem.start()
+        island.post(
+            .liveActivity(
+                LiveActivityPayload(
+                    id: "halo.ready",
+                    title: "Halo",
+                    subtitle: "Hover the notch · Halo in the menu bar",
+                    progress: nil,
+                    symbol: "sparkles",
+                    timeout: 5
+                )
+            ),
+            duration: 5
+        )
     }
 
     func quit() {
