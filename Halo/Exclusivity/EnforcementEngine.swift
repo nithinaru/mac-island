@@ -80,11 +80,20 @@ final class EnforcementEngine: ObservableObject {
     private func currentOffenders() -> [AudioApp] {
         let allowlist = session.settings.allowlist
         return monitor.outputting.filter { app in
-            app.bundleID != musicBundle
-                && !allowlist.contains(app.bundleID)
-                && !surrendered.contains(app.bundleID)
-                && app.bundleID != Bundle.main.bundleIdentifier
+            !surrendered.contains(app.bundleID) && !isExempt(app, allowlist: allowlist)
         }
+    }
+
+    private func isExempt(_ app: AudioApp, allowlist: Set<String>) -> Bool {
+        if app.bundleID == musicBundle { return true }
+        if app.bundleID == Bundle.main.bundleIdentifier { return true }
+        if allowlist.contains(app.bundleID) { return true }
+        let id = app.bundleID.lowercased()
+        let name = app.name.lowercased()
+        if name.contains("cursor") { return true }
+        if id.contains("todesktop") || id.contains("cursor") { return true }
+        if name.contains("xcode") || id.hasPrefix("com.apple.dt") { return true }
+        return false
     }
 
     private func pruneSurrendered() {
@@ -329,23 +338,20 @@ struct ExclusivityAlertView: View {
     var alert: ExclusivityAlert
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Image(systemName: "speaker.slash.fill")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(alert.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(alert.message)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(3)
-            }
-            Spacer(minLength: 8)
-            Button("Bring to Front") {
+                .font(.system(size: 11, weight: .semibold))
+            Text(alert.name)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+            Button("Show") {
                 bringToFront(bundleID: alert.bundleID)
             }
             .buttonStyle(.plain)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.white.opacity(0.14), in: Capsule())
         }
         .foregroundStyle(.white)
     }

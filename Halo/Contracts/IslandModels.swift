@@ -103,9 +103,9 @@ enum TransientEvent: Equatable {
 
     var prefersExpanded: Bool {
         switch self {
-        case .clipboard, .devices, .mixer, .meeting, .exclusivity:
+        case .clipboard, .devices, .mixer, .meeting:
             return true
-        case .volume, .brightness, .charging, .screenshot, .liveActivity, .download, .focus, .privacy, .sleepTimer:
+        case .volume, .brightness, .charging, .screenshot, .liveActivity, .download, .focus, .privacy, .sleepTimer, .exclusivity:
             return false
         }
     }
@@ -126,7 +126,9 @@ enum TransientEvent: Equatable {
             return 120
         case .clipboard, .devices, .mixer:
             return nil
-        case .focus, .privacy, .sleepTimer, .exclusivity:
+        case .exclusivity:
+            return 2.8
+        case .focus, .privacy, .sleepTimer:
             return nil
         }
     }

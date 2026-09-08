@@ -207,7 +207,7 @@ struct IslandChrome: View {
         let threshold = MotionConstants.gooThreshold
         let smoothness = MotionConstants.gooSmoothness
         return ZStack {
-            if state == .idle {
+            if state == .idle || state == .compact {
                 chromeShape.fill(Color.black)
             } else {
                 GooThresholdView(

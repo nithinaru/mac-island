@@ -77,6 +77,16 @@ final class SettingsStore: ObservableObject {
         "com.apple.FaceTime",
         "com.tinyspeck.slackmacgap",
         "com.hnc.Discord",
-        "com.apple.Music"
+        "com.apple.Music",
+        "com.todesktop.230313mzl4w4u92",
+        "com.todesktop.230313mzl4w4u92.helper"
     ]
+
+    func ensureBuiltInAllowlist() {
+        var next = allowlist
+        for id in Self.defaultAllowlist {
+            next.insert(id)
+        }
+        allowlist = next
+    }
 }

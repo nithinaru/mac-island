@@ -36,8 +36,8 @@ struct IslandRootView: View {
                 gooDetached: session.island.gooDetached
             )
             IslandContentView(namespace: islandNS)
-                .padding(.horizontal, state == .expanded ? 18 : 8)
-                .padding(.top, state == .expanded ? metrics.notchHeight + 8 : 0)
+                .padding(.horizontal, state == .expanded ? 16 : 6)
+                .padding(.top, state == .expanded ? metrics.notchHeight + 4 : 0)
         }
         .frame(width: size.width, height: size.height)
         .clipShape(islandClipShape(size: size, metrics: metrics, state: state))

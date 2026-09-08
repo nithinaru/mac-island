@@ -37,6 +37,7 @@ final class AppSession: ObservableObject {
     func start() {
         NSApp.setActivationPolicy(.accessory)
         geometry.refresh()
+        settings.ensureBuiltInAllowlist()
         windows.start()
         island.start()
         music.start()
