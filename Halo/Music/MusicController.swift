@@ -4,39 +4,46 @@ import ScriptingBridge
 import SwiftUI
 
 /// ScriptingBridge proxies are dynamic; the generated `Music.h` classes have no
-/// implementation objects to link. These protocols are the public Music suite.
+/// implementation objects to link. Optional @objc members + SBObject conformance
+/// is the public Swift pattern — a forced `as!` abort()s because SBApplication
+/// does not formally conform otherwise.
 @objc private protocol HaloMusicApplication: NSObjectProtocol {
-    var currentTrack: AnyObject { get }
-    var currentPlaylist: AnyObject { get }
-    var playerPosition: Double { get set }
-    var playerState: MusicEPlS { get }
-    var soundVolume: Int { get set }
-    func playpause()
-    func nextTrack()
-    func previousTrack()
+    @objc optional var currentTrack: AnyObject { get }
+    @objc optional var currentPlaylist: AnyObject { get }
+    @objc optional var playerPosition: Double { get set }
+    @objc optional var playerState: MusicEPlS { get }
+    @objc optional var soundVolume: Int { get set }
+    @objc optional func playpause()
+    @objc optional func nextTrack()
+    @objc optional func previousTrack()
 }
 
 @objc private protocol HaloMusicTrack: NSObjectProtocol {
-    var name: String { get }
-    var artist: String { get }
-    var album: String { get }
-    var persistentID: String { get }
-    var duration: Double { get }
-    var rating: Int { get set }
-    var playedCount: Int { get }
-    var bpm: Int { get }
-    var index: Int { get }
-    func artworks() -> SBElementArray
+    @objc optional var name: String { get }
+    @objc optional var artist: String { get }
+    @objc optional var album: String { get }
+    @objc optional var persistentID: String { get }
+    @objc optional var duration: Double { get }
+    @objc optional var rating: Int { get set }
+    @objc optional var playedCount: Int { get }
+    @objc optional var bpm: Int { get }
+    @objc optional var index: Int { get }
+    @objc optional func artworks() -> SBElementArray
 }
 
 @objc private protocol HaloMusicPlaylist: NSObjectProtocol {
-    func tracks() -> SBElementArray
+    @objc optional func tracks() -> SBElementArray
 }
 
 @objc private protocol HaloMusicArtwork: NSObjectProtocol {
-    var data: NSImage { get }
-    var rawData: Any { get }
+    @objc optional var data: NSImage { get }
+    @objc optional var rawData: Any { get }
 }
+
+extension SBApplication: HaloMusicApplication {}
+extension SBObject: HaloMusicTrack {}
+extension SBObject: HaloMusicPlaylist {}
+extension SBObject: HaloMusicArtwork {}
 
 @MainActor
 final class MusicController: ObservableObject {
@@ -88,37 +95,37 @@ final class MusicController: ObservableObject {
     }
 
     func playPause() {
-        withMusic { $0.playpause() }
+        withMusic { $0.playpause?() }
     }
 
     func nextTrack() {
-        withMusic { $0.nextTrack() }
+        withMusic { $0.nextTrack?() }
     }
 
     func previousTrack() {
-        withMusic { $0.previousTrack() }
+        withMusic { $0.previousTrack?() }
     }
 
     func seek(to seconds: TimeInterval) {
         withMusic { music in
-            music.playerPosition = max(seconds, 0)
-            position = music.playerPosition
+            (music as AnyObject).setValue(max(seconds, 0), forKey: "playerPosition")
+            position = music.playerPosition ?? 0
             snapshot?.position = position
         }
     }
 
     func setVolume(_ value: Int) {
         withMusic { music in
-            music.soundVolume = min(max(value, 0), 100)
-            snapshot?.volume = Int(music.soundVolume)
+            (music as AnyObject).setValue(min(max(value, 0), 100), forKey: "soundVolume")
+            snapshot?.volume = Int(music.soundVolume ?? 0)
         }
     }
 
     func setRating(_ rating: Int) {
         withMusic { music in
             guard let track = validTrack(music.currentTrack) else { return }
-            track.rating = min(max(rating, 0), 100)
-            snapshot?.rating = Int(track.rating)
+            (track as AnyObject).setValue(min(max(rating, 0), 100), forKey: "rating")
+            snapshot?.rating = Int(track.rating ?? 0)
         }
     }
 
@@ -160,7 +167,7 @@ final class MusicController: ObservableObject {
             return
         }
         withMusic { music in
-            let seconds = music.playerPosition
+            let seconds = music.playerPosition ?? 0
             guard seconds.isFinite else { return }
             position = seconds
             snapshot?.position = seconds
@@ -187,9 +194,9 @@ final class MusicController: ObservableObject {
         let isPlaying: Bool
         if playerStateText.isEmpty {
             switch music.playerState {
-            case MusicEPlSPlaying, MusicEPlSFastForwarding, MusicEPlSRewinding:
+            case .some(MusicEPlSPlaying), .some(MusicEPlSFastForwarding), .some(MusicEPlSRewinding):
                 isPlaying = true
-            case MusicEPlSPaused, MusicEPlSStopped:
+            case .some(MusicEPlSPaused), .some(MusicEPlSStopped), .none:
                 isPlaying = false
             default:
                 isPlaying = false
@@ -223,7 +230,7 @@ final class MusicController: ObservableObject {
         }
 
         let duration: TimeInterval = {
-            if let track, track.duration > 0 { return track.duration }
+            if let track, let value = track.duration, value > 0 { return value }
             if let total = numberValue(userInfo?["Total Time"]) {
                 return total > 10_000 ? total / 1000 : total
             }
@@ -232,17 +239,16 @@ final class MusicController: ObservableObject {
 
         var currentPosition = position
         if isPlaying || session.island.visualState == .expanded {
-            let sbPosition = music.playerPosition
-            if sbPosition.isFinite {
+            if let sbPosition = music.playerPosition, sbPosition.isFinite {
                 currentPosition = max(sbPosition, 0)
             }
         }
         position = currentPosition
 
-        let rating = track.map { Int($0.rating) } ?? snapshot?.rating ?? 0
-        let playedCount = track.map { Int($0.playedCount) } ?? snapshot?.playedCount ?? 0
-        let bpm = track.map { Int($0.bpm) } ?? snapshot?.bpm ?? 0
-        let volume = Int(music.soundVolume)
+        let rating = track.flatMap { $0.rating }.map { Int($0) } ?? snapshot?.rating ?? 0
+        let playedCount = track.flatMap { $0.playedCount }.map { Int($0) } ?? snapshot?.playedCount ?? 0
+        let bpm = track.flatMap { $0.bpm }.map { Int($0) } ?? snapshot?.bpm ?? 0
+        let volume = Int(music.soundVolume ?? 0)
         let fileURL = track.flatMap(fileURL(for:))
         let artwork = artworkImage(for: track, persistentID: persistentID)
         let fallbackGradient = ArtworkFallback.gradient(artist: artist, album: album)
@@ -288,17 +294,17 @@ final class MusicController: ObservableObject {
             return cachedArtwork
         }
         guard let track else { return nil }
-        let arts = track.artworks()
-        guard arts.count > 0,
+        let arts = track.artworks?()
+        guard let arts, arts.count > 0,
               let art: HaloMusicArtwork = asMusicProxy(arts.object(at: 0)) else {
             cachedArtwork = nil
             cachedArtworkID = persistentID
             return nil
         }
-        if art.data.size.width > 0, art.data.size.height > 0 {
-            cachedArtwork = art.data
+        if let image = art.data, image.size.width > 0, image.size.height > 0 {
+            cachedArtwork = image
             cachedArtworkID = persistentID
-            return art.data
+            return image
         }
         if let raw = art.rawData as? Data, let image = NSImage(data: raw), image.size.width > 0 {
             cachedArtwork = image
@@ -316,13 +322,13 @@ final class MusicController: ObservableObject {
 
     private func peekNextTracks(music: HaloMusicApplication, current: HaloMusicTrack) -> [QueueTrack] {
         guard let playlist: HaloMusicPlaylist = asMusicProxy(music.currentPlaylist) else { return [] }
-        let elements = playlist.tracks()
-        let count = Int(elements.count)
-        guard count > 0 else { return [] }
+        let elements = playlist.tracks?()
+        let count = Int(elements?.count ?? 0)
+        guard let elements, count > 0 else { return [] }
 
-        var start = current.index
+        var start = current.index ?? 0
         if start <= 0 {
-            let pid = current.persistentID
+            let pid = current.persistentID ?? ""
             if !pid.isEmpty {
                 let limit = min(count, 400)
                 for i in 0..<limit {
@@ -340,12 +346,12 @@ final class MusicController: ObservableObject {
         var index = start + 1
         while result.count < 3, index <= count {
             if let track: HaloMusicTrack = asMusicProxy(elements.object(at: index - 1)) {
-                let id = firstNonEmpty(track.persistentID, "\(index)")
+                let id = firstNonEmpty(track.persistentID ?? "", "\(index)")
                 result.append(
                     QueueTrack(
                         id: id,
-                        title: firstNonEmpty(track.name, "Track \(index)"),
-                        artist: track.artist
+                        title: firstNonEmpty(track.name ?? "", "Track \(index)"),
+                        artist: track.artist ?? ""
                     )
                 )
             }
@@ -356,20 +362,18 @@ final class MusicController: ObservableObject {
 
     private func asMusicProxy<T>(_ object: Any?) -> T? {
         guard let object, !(object is NSNull) else { return nil }
-        let typed: T = (object as AnyObject) as! T
-        return typed
+        return object as? T
     }
 
     private func validTrack(_ raw: AnyObject?) -> HaloMusicTrack? {
         guard let track: HaloMusicTrack = asMusicProxy(raw) else { return nil }
-        if track.persistentID.isEmpty && track.name.isEmpty { return nil }
+        if (track.persistentID ?? "").isEmpty && (track.name ?? "").isEmpty { return nil }
         return track
     }
 
     private func musicApp() -> HaloMusicApplication? {
         guard musicIsRunning else { return nil }
-        guard let sb = SBApplication(bundleIdentifier: "com.apple.Music") else { return nil }
-        return asMusicProxy(sb)
+        return SBApplication(bundleIdentifier: "com.apple.Music")
     }
 
     @discardableResult
