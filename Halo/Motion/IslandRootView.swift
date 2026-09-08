@@ -9,22 +9,14 @@ struct IslandRootView: View {
             let metrics = session.geometry.metrics
             let size = currentSize(metrics)
             VStack(spacing: 0) {
-                Spacer(minLength: 0)
                 island(size: size, metrics: metrics)
                     .frame(width: size.width, height: size.height, alignment: .top)
+                    .matchedGeometryEffect(id: GeometryIDs.pill, in: islandNS, properties: .frame)
                 Spacer(minLength: 0)
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
         }
         .background(Color.clear)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            session.island.setHover(hovering)
-        }
-        .contextMenu {
-            IslandContextMenu()
-                .environmentObject(session)
-        }
         .onAppear {
             session.settings.syncMotionConstants()
         }
@@ -33,22 +25,33 @@ struct IslandRootView: View {
     @ViewBuilder
     private func island(size: CGSize, metrics: NotchMetrics) -> some View {
         let state = session.island.visualState
-        ZStack {
+        let idleOnHardware = state == .idle && !metrics.isFallbackPill
+        ZStack(alignment: .top) {
             IslandChrome(
                 size: size,
                 metrics: metrics,
                 state: state,
                 glow: session.music.snapshot?.accent ?? Color.white.opacity(0.2),
-                glowPulse: session.tempo.pulse
+                glowPulse: session.tempo.pulse,
+                gooDetached: session.island.gooDetached
             )
             IslandContentView(namespace: islandNS)
                 .padding(.horizontal, state == .expanded ? 18 : 8)
                 .padding(.top, state == .expanded ? metrics.notchHeight + 8 : 0)
         }
         .frame(width: size.width, height: size.height)
-        .clipShape(RoundedRectangle(cornerRadius: state == .idle ? size.height / 2 : 28, style: .continuous))
-        .shadow(color: .black.opacity(state == .idle && !metrics.isFallbackPill ? 0 : 0.35), radius: 18, y: 8)
-        .opacity(state == .idle && !metrics.isFallbackPill ? 0.02 : 1)
+        .clipShape(islandClipShape(size: size, metrics: metrics, state: state))
+        .contentShape(islandClipShape(size: size, metrics: metrics, state: state))
+        .shadow(color: .black.opacity(idleOnHardware ? 0 : 0.35), radius: 18, y: 8)
+        .opacity(idleOnHardware ? 0.02 : 1)
+        .modifier(EdgeScrubber())
+        .onHover { hovering in
+            session.island.setHover(hovering)
+        }
+        .contextMenu {
+            IslandContextMenu()
+                .environmentObject(session)
+        }
     }
 
     private func currentSize(_ metrics: NotchMetrics) -> CGSize {
@@ -76,26 +79,41 @@ struct IslandContentView: View {
         } else if state == .idle {
             Color.clear
         } else {
-            PlaceholderIslandView(state: state)
+            PlaceholderIslandView(state: state, namespace: namespace)
         }
     }
 }
 
 struct PlaceholderIslandView: View {
     var state: IslandState
+    var namespace: Namespace.ID
 
     var body: some View {
         HStack(spacing: 8) {
-            Circle().fill(Color.white.opacity(0.85)).frame(width: 18, height: 18)
+            Circle()
+                .fill(Color.white.opacity(0.85))
+                .frame(width: 18, height: 18)
+                .matchedGeometryEffect(id: GeometryIDs.art, in: namespace)
             if state != .idle {
-                Capsule().fill(Color.white.opacity(0.35)).frame(height: 8)
+                Capsule()
+                    .fill(Color.white.opacity(0.35))
+                    .frame(height: 8)
+                    .matchedGeometryEffect(id: GeometryIDs.title, in: namespace)
             }
             if state == .expanded {
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 6) {
                     Capsule().fill(Color.white.opacity(0.5)).frame(width: 120, height: 8)
-                    Capsule().fill(Color.white.opacity(0.25)).frame(width: 80, height: 8)
+                    Capsule()
+                        .fill(Color.white.opacity(0.25))
+                        .frame(width: 80, height: 8)
+                        .matchedGeometryEffect(id: GeometryIDs.waveform, in: namespace)
                 }
+            } else if state == .compact {
+                Capsule()
+                    .fill(Color.white.opacity(0.4))
+                    .frame(width: 36, height: 10)
+                    .matchedGeometryEffect(id: GeometryIDs.waveform, in: namespace)
             }
         }
         .padding(.horizontal, 10)

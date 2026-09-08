@@ -2,8 +2,14 @@ import AppKit
 
 final class NotchWindow: NSPanel {
     init(screen: NSScreen) {
+        let seed = NSRect(
+            x: screen.frame.midX,
+            y: screen.frame.maxY,
+            width: 1,
+            height: 1
+        )
         super.init(
-            contentRect: .zero,
+            contentRect: seed,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -20,10 +26,15 @@ final class NotchWindow: NSPanel {
         titlebarAppearsTransparent = true
         animationBehavior = .none
         isReleasedWhenClosed = false
-        self.screen.map { _ in }
-        setFrameAutosaveName("")
+        becomesKeyOnlyIfNeeded = true
+        acceptsMouseMovedEvents = true
+        appearance = NSAppearance(named: .darkAqua)
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
 }

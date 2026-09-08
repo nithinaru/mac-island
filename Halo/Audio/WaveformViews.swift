@@ -1,19 +1,57 @@
 import SwiftUI
 
+/// Display-synced BPM pulse. `TimelineView` is paused when idle / not playing so idle CPU stays near zero.
+struct TempoPulseDriver: View {
+    @EnvironmentObject private var session: AppSession
+
+    var body: some View {
+        let active = session.settings.bpmBreathing
+            && session.tempo.bpm > 0
+            && session.music.snapshot?.isPlaying == true
+            && session.island.visualState != .idle
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !active)) { context in
+            Color.clear
+                .frame(width: 0, height: 0)
+                .onChange(of: context.date) { _, date in
+                    session.tempo.tick(at: date)
+                }
+        }
+        .onChange(of: active) { _, isActive in
+            if !isActive {
+                session.tempo.idlePulse()
+            }
+        }
+        .onDisappear {
+            session.tempo.idlePulse()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 struct CompactWaveformView: View {
     @EnvironmentObject private var session: AppSession
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 120.0, paused: session.island.visualState == .idle)) { _ in
-            HStack(alignment: .center, spacing: 2) {
-                ForEach(Array(session.processTap.bars.enumerated()), id: \.offset) { _, value in
-                    Capsule()
-                        .fill(session.music.snapshot?.accent ?? .white)
-                        .frame(width: 3, height: max(4, CGFloat(value) * 18))
-                }
+        let playing = session.music.snapshot?.isPlaying == true
+        let accent = session.music.snapshot?.accent ?? .white
+        let values: [Float] = {
+            if session.settings.reactiveWaveform, playing {
+                return session.processTap.bars
+            }
+            return Array(repeating: 0.10, count: session.processTap.bars.count)
+        }()
+
+        HStack(alignment: .center, spacing: 2) {
+            ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+                Capsule()
+                    .fill(accent)
+                    .frame(width: 3, height: max(4, CGFloat(value) * 18))
             }
         }
         .frame(width: 36, height: 22)
+        .overlay { TempoPulseDriver() }
+        .allowsHitTesting(false)
     }
 }
 
@@ -27,31 +65,51 @@ struct WaveformSeekBar: View {
             let peaks = session.waveform.peaks
             let duration = max(session.music.snapshot?.duration ?? 1, 0.001)
             let position = session.music.snapshot?.position ?? session.music.position
-            let progress = dragging ? dragProgress : CGFloat(position / duration)
-            WaveformShape(peaks: peaks)
-                .fill(Color.white.opacity(0.22))
-            WaveformShape(peaks: peaks)
-                .fill(session.music.snapshot?.accent ?? Color.white)
-                .mask(alignment: .leading) {
-                    Rectangle().frame(width: proxy.size.width * progress)
+            let progress = dragging ? dragProgress : CGFloat(min(max(position / duration, 0), 1))
+            let accent = session.music.snapshot?.accent ?? Color.white
+            let width = proxy.size.width
+
+            ZStack(alignment: .leading) {
+                if peaks.isEmpty {
+                    Capsule()
+                        .fill(Color.white.opacity(0.18))
+                    Capsule()
+                        .fill(accent)
+                        .frame(width: max(0, width * progress))
+                } else {
+                    WaveformShape(peaks: peaks)
+                        .fill(Color.white.opacity(0.22))
+                    WaveformShape(peaks: peaks)
+                        .fill(accent)
+                        .mask(alignment: .leading) {
+                            Rectangle().frame(width: width * progress)
+                        }
                 }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        guard session.island.visualState == .expanded else { return }
+                        dragging = true
+                        let x = min(max(value.location.x, 0), width)
+                        dragProgress = width > 0 ? x / width : 0
+                        session.music.seek(to: duration * Double(dragProgress))
+                    }
+                    .onEnded { value in
+                        guard session.island.visualState == .expanded else {
+                            dragging = false
+                            return
+                        }
+                        let x = min(max(value.location.x, 0), width)
+                        dragProgress = width > 0 ? x / width : 0
+                        session.music.seek(to: duration * Double(dragProgress))
+                        dragging = false
+                    }
+            )
         }
         .frame(height: 28)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    guard session.island.visualState == .expanded else { return }
-                    dragging = true
-                    let width = max(value.startLocation.x + value.translation.width, 0)
-                    dragProgress = min(max(width / 280, 0), 1)
-                }
-                .onEnded { _ in
-                    let duration = session.music.snapshot?.duration ?? 0
-                    session.music.seek(to: duration * Double(dragProgress))
-                    dragging = false
-                }
-        )
+        .overlay { TempoPulseDriver() }
     }
 }
 
@@ -60,21 +118,18 @@ struct WaveformShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let count = max(peaks.count, 2)
-        let step = rect.width / CGFloat(count - 1)
+        guard !peaks.isEmpty, rect.width > 0, rect.height > 0 else { return path }
+        let count = peaks.count
+        let step = rect.width / CGFloat(max(count, 1))
         let mid = rect.midY
-        path.move(to: CGPoint(x: 0, y: mid))
+        let barWidth = max(step * 0.72, 0.6)
+
         for (i, peak) in peaks.enumerated() {
-            let x = CGFloat(i) * step
-            let amp = CGFloat(peak) * rect.height * 0.48
-            path.addLine(to: CGPoint(x: x, y: mid - amp))
+            let x = CGFloat(i) * step + (step - barWidth) * 0.5
+            let amp = CGFloat(max(peak, 0.02)) * rect.height * 0.48
+            let column = CGRect(x: x, y: mid - amp, width: barWidth, height: amp * 2)
+            path.addRoundedRect(in: column, cornerSize: CGSize(width: barWidth / 2, height: barWidth / 2))
         }
-        for (i, peak) in peaks.enumerated().reversed() {
-            let x = CGFloat(i) * step
-            let amp = CGFloat(peak) * rect.height * 0.48
-            path.addLine(to: CGPoint(x: x, y: mid + amp))
-        }
-        path.closeSubpath()
         return path
     }
 }
@@ -83,16 +138,28 @@ struct EdgeScrubber: ViewModifier {
     @EnvironmentObject private var session: AppSession
 
     func body(content: Content) -> some View {
-        content.gesture(
-            DragGesture(minimumDistance: 4)
-                .onChanged { value in
-                    guard session.settings.edgeScrubbing,
-                          session.island.visualState == .expanded,
-                          let snap = session.music.snapshot
-                    else { return }
-                    let progress = min(max(value.location.x / max(session.geometry.metrics.expandedSize.width, 1), 0), 1)
-                    session.music.seek(to: snap.duration * Double(progress))
+        let expanded = session.island.visualState == .expanded
+        let enabled = session.settings.edgeScrubbing && expanded
+        content
+            .overlay(alignment: .bottom) {
+                GeometryReader { proxy in
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 2)
+                                .onChanged { value in
+                                    guard session.settings.edgeScrubbing,
+                                          session.island.visualState == .expanded,
+                                          let snap = session.music.snapshot
+                                    else { return }
+                                    let width = max(proxy.size.width, 1)
+                                    let progress = min(max(value.location.x / width, 0), 1)
+                                    session.music.seek(to: snap.duration * Double(progress))
+                                }
+                        )
                 }
-        )
+                .frame(height: 16)
+                .allowsHitTesting(enabled)
+            }
     }
 }

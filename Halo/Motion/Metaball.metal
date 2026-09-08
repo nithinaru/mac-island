@@ -1,3 +1,5 @@
+// Kept in-repo as the preferred threshold kernel. Halo.xcodeproj excludes this
+// file because the Metal toolchain may be missing; GooCIFallback is the runtime path.
 #include <metal_stdlib>
 #include <SwiftUI/SwiftUI_Metal.h>
 using namespace metal;

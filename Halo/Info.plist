@@ -28,6 +28,8 @@
 	<string>Halo shows which app is using your microphone.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Halo shows your next meeting in the notch.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Halo measures Music's output level for the live waveform.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

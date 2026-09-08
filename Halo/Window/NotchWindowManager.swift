@@ -7,31 +7,33 @@ final class NotchWindowManager: NSObject {
     private var window: NotchWindow?
     private var hosting: NSView?
     private var tracking: NSTrackingArea?
+    private var started = false
 
     init(session: AppSession) {
         self.session = session
+        super.init()
     }
 
     func start() {
+        guard !started else {
+            rebuild()
+            return
+        }
+        started = true
         rebuild()
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(screensChanged),
-            name: NSWorkspace.screensDidSleepNotification,
-            object: nil
-        )
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(screensChanged),
-            name: NSWorkspace.screensDidWakeNotification,
-            object: nil
-        )
+
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspace.addObserver(self, selector: #selector(screensChanged), name: NSWorkspace.screensDidSleepNotification, object: nil)
+        workspace.addObserver(self, selector: #selector(screensChanged), name: NSWorkspace.screensDidWakeNotification, object: nil)
+        workspace.addObserver(self, selector: #selector(screensChanged), name: NSWorkspace.willSleepNotification, object: nil)
+        workspace.addObserver(self, selector: #selector(screensChanged), name: NSWorkspace.didWakeNotification, object: nil)
     }
 
     @objc private func screensChanged() {
@@ -41,28 +43,41 @@ final class NotchWindowManager: NSObject {
 
     func rebuild() {
         session.geometry.refresh()
-        let metrics = session.geometry.metrics
-        let screen = session.geometry.screen ?? NSScreen.main
+        tearDownWindow()
 
-        if window == nil, let screen {
-            let panel = NotchWindow(screen: screen)
-            let root = IslandRootView().environmentObject(session)
-            let host = NSHostingView(rootView: root)
-            host.frame = CGRect(origin: .zero, size: metrics.windowSize)
-            panel.contentView = host
-            hosting = host
-            window = panel
+        let metrics = session.geometry.metrics
+        guard let screen = session.geometry.screen ?? NSScreen.preferredIslandScreen else {
+            return
         }
 
-        guard let window else { return }
-        window.setFrame(
+        let panel = NotchWindow(screen: screen)
+        let root = IslandRootView().environmentObject(session)
+        let host = IslandHostingView(rootView: root)
+        host.frame = CGRect(origin: .zero, size: metrics.windowSize)
+        panel.contentView = host
+        hosting = host
+        window = panel
+
+        panel.setFrame(
             CGRect(origin: metrics.windowOrigin, size: metrics.windowSize),
             display: true
         )
-        hosting?.frame = CGRect(origin: .zero, size: metrics.windowSize)
-        window.ignoresMouseEvents = false
-        window.orderFrontRegardless()
+        host.frame = CGRect(origin: .zero, size: metrics.windowSize)
+        panel.ignoresMouseEvents = false
+        panel.orderFrontRegardless()
         installTracking()
+    }
+
+    private func tearDownWindow() {
+        if let tracking, let content = window?.contentView {
+            content.removeTrackingArea(tracking)
+        }
+        tracking = nil
+        window?.orderOut(nil)
+        window?.contentView = nil
+        window?.close()
+        hosting = nil
+        window = nil
     }
 
     private func installTracking() {
@@ -89,11 +104,28 @@ final class NotchWindowManager: NSObject {
         tracking = area
     }
 
-    func mouseEntered(with event: NSEvent) {
+    @objc func mouseEntered(with event: NSEvent) {
         session.island.setHover(true)
     }
 
-    func mouseExited(with event: NSEvent) {
+    @objc func mouseExited(with event: NSEvent) {
         session.island.setHover(false)
+    }
+}
+
+private final class IslandHostingView<Content: View>: NSHostingView<Content> {
+    override var isOpaque: Bool { false }
+    override var safeAreaInsets: NSEdgeInsets { NSEdgeInsets() }
+
+    required init(rootView: Content) {
+        super.init(rootView: rootView)
+        if #available(macOS 14.0, *) {
+            safeAreaRegions = []
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }

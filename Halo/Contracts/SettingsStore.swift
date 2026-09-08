@@ -28,6 +28,7 @@ final class SettingsStore: ObservableObject {
     @AppStorage("gooThreshold") var gooThreshold: Double = 0.5
     @AppStorage("extraBounce") var extraBounce: Double = 0.14
     @AppStorage("allowlist") var allowlistRaw: String = SettingsStore.defaultAllowlist.joined(separator: ",")
+    @AppStorage("launchAtLoginError") var launchAtLoginError: String = ""
 
     var enforcementMode: EnforcementMode {
         get { EnforcementMode(rawValue: enforcementModeRaw) ?? .enforce }
@@ -41,6 +42,24 @@ final class SettingsStore: ObservableObject {
         set {
             allowlistRaw = newValue.sorted().joined(separator: ",")
         }
+    }
+
+    var allowlistEntries: [String] {
+        allowlist.sorted()
+    }
+
+    func addAllowlistEntry(_ bundleID: String) {
+        let trimmed = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var next = allowlist
+        next.insert(trimmed)
+        allowlist = next
+    }
+
+    func removeAllowlistEntry(_ bundleID: String) {
+        var next = allowlist
+        next.remove(bundleID)
+        allowlist = next
     }
 
     func syncMotionConstants() {
