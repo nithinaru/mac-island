@@ -36,8 +36,9 @@ struct IslandRootView: View {
                 gooDetached: session.island.gooDetached
             )
             IslandContentView(namespace: islandNS)
-                .padding(.horizontal, state == .expanded ? 16 : 6)
-                .padding(.top, state == .expanded ? metrics.notchHeight + 4 : 0)
+                .padding(.horizontal, state == .expanded ? 14 : 0)
+                .padding(.top, state == .expanded ? metrics.notchHeight + 8 : 0)
+                .padding(.bottom, state == .expanded ? 10 : 0)
         }
         .frame(width: size.width, height: size.height)
         .clipShape(islandClipShape(size: size, metrics: metrics, state: state))
@@ -87,21 +88,16 @@ struct IslandContentView: View {
 struct PlaceholderIslandView: View {
     var state: IslandState
     var namespace: Namespace.ID
+    @EnvironmentObject private var session: AppSession
 
     var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(Color.white.opacity(0.85))
-                .frame(width: 18, height: 18)
-                .matchedGeometryEffect(id: GeometryIDs.art, in: namespace)
-            if state != .idle {
-                Capsule()
-                    .fill(Color.white.opacity(0.35))
-                    .frame(height: 8)
-                    .matchedGeometryEffect(id: GeometryIDs.title, in: namespace)
-            }
-            if state == .expanded {
-                Spacer(minLength: 0)
+        let notchWidth = session.geometry.metrics.idleSize.width
+        if state == .expanded {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(Color.white.opacity(0.85))
+                    .frame(width: 36, height: 36)
+                    .matchedGeometryEffect(id: GeometryIDs.art, in: namespace)
                 VStack(alignment: .leading, spacing: 6) {
                     Capsule().fill(Color.white.opacity(0.5)).frame(width: 120, height: 8)
                     Capsule()
@@ -109,14 +105,21 @@ struct PlaceholderIslandView: View {
                         .frame(width: 80, height: 8)
                         .matchedGeometryEffect(id: GeometryIDs.waveform, in: namespace)
                 }
-            } else if state == .compact {
+                Spacer(minLength: 0)
+            }
+        } else {
+            CompactWingLayout(notchWidth: notchWidth) {
+                Circle()
+                    .fill(Color.white.opacity(0.9))
+                    .frame(width: 16, height: 16)
+                    .matchedGeometryEffect(id: GeometryIDs.art, in: namespace)
+            } right: {
                 Capsule()
-                    .fill(Color.white.opacity(0.4))
-                    .frame(width: 36, height: 10)
+                    .fill(Color.white.opacity(0.45))
+                    .frame(width: 28, height: 8)
                     .matchedGeometryEffect(id: GeometryIDs.waveform, in: namespace)
             }
         }
-        .padding(.horizontal, 10)
     }
 }
 
@@ -127,6 +130,153 @@ struct TransientHostView: View {
     @EnvironmentObject private var session: AppSession
 
     var body: some View {
+        let notchWidth = session.geometry.metrics.idleSize.width
+        if state == .expanded {
+            expandedBody
+        } else {
+            CompactWingLayout(notchWidth: notchWidth) {
+                leftWing
+            } right: {
+                rightWing
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var leftWing: some View {
+        switch event {
+        case .volume(_, let muted):
+            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .brightness:
+            Image(systemName: "sun.max.fill")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .charging:
+            Image(systemName: "bolt.fill")
+                .foregroundStyle(.green)
+                .font(.system(size: 11, weight: .semibold))
+        case .liveActivity(let payload):
+            Image(systemName: payload.symbol ?? "sparkles")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .screenshot:
+            Image(systemName: "camera.fill")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .download:
+            Image(systemName: "arrow.down.circle.fill")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .privacy:
+            Image(systemName: "mic.fill")
+                .foregroundStyle(.green)
+                .font(.system(size: 11, weight: .semibold))
+        case .exclusivity:
+            Image(systemName: "speaker.slash.fill")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .focus:
+            Image(systemName: "timer")
+                .foregroundStyle(.orange)
+                .font(.system(size: 11, weight: .semibold))
+        case .sleepTimer:
+            Image(systemName: "moon.zzz.fill")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .meeting:
+            Image(systemName: "calendar")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .clipboard:
+            Image(systemName: "doc.on.clipboard")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .devices:
+            Image(systemName: "hifispeaker.fill")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        case .mixer:
+            Image(systemName: "slider.horizontal.3")
+                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .semibold))
+        }
+    }
+
+    @ViewBuilder
+    private var rightWing: some View {
+        switch event {
+        case .volume(let level, _):
+            Capsule()
+                .fill(Color.white.opacity(0.2))
+                .frame(width: 34, height: 4)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(Color.white).frame(width: 34 * CGFloat(level))
+                }
+        case .brightness(let value):
+            Capsule()
+                .fill(Color.white.opacity(0.2))
+                .frame(width: 34, height: 4)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(Color.white).frame(width: 34 * CGFloat(value))
+                }
+        case .charging(let percent, _):
+            Text("\(percent)%")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+        case .liveActivity(let payload):
+            Text(payload.title)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        case .screenshot:
+            Text("Shot")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+        case .download(let status):
+            Text(status.filename)
+                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        case .privacy(let status):
+            Text(status.micApps.first?.name ?? "Mic")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        case .exclusivity(let alert):
+            Text(alert.name)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        case .focus(let progress):
+            FocusArcView(progress: progress)
+        case .sleepTimer(let remaining, _):
+            Text(timeString(remaining))
+                .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.white)
+        case .meeting(let payload):
+            Text(payload.title)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        case .clipboard:
+            Text("Copied")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+        case .devices:
+            Text("Output")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+        case .mixer:
+            Text("Audio")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+        }
+    }
+
+    @ViewBuilder
+    private var expandedBody: some View {
         switch event {
         case .volume(let level, let muted):
             HUDMeterView(symbol: muted ? "speaker.slash.fill" : "speaker.wave.3.fill", value: CGFloat(level))
@@ -157,5 +307,11 @@ struct TransientHostView: View {
         case .sleepTimer(let remaining, let total):
             SleepTimerView(remaining: remaining, total: total)
         }
+    }
+
+    private func timeString(_ remaining: TimeInterval) -> String {
+        let minutes = Int(remaining) / 60
+        let seconds = Int(remaining) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }

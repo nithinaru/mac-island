@@ -63,11 +63,11 @@ final class ScreenGeometryStore: ObservableObject {
     }
 
     private static func compactSize(idle: CGSize) -> CGSize {
-        CGSize(width: idle.width + 72, height: idle.height)
+        CGSize(width: idle.width + 108, height: idle.height)
     }
 
     private static func expandedSize(idle: CGSize) -> CGSize {
-        CGSize(width: max(320, idle.width + 140), height: idle.height + 76)
+        CGSize(width: max(340, idle.width + 156), height: idle.height + 92)
     }
 
     private static func windowSize(expanded: CGSize) -> CGSize {

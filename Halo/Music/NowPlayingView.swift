@@ -7,42 +7,21 @@ struct NowPlayingView: View {
     var body: some View {
         let snapshot = session.music.snapshot
         let state = session.island.visualState
-        HStack(spacing: 10) {
-            art(snapshot)
-                .matchedGeometryEffect(id: GeometryIDs.art, in: namespace)
+        let notchWidth = session.geometry.metrics.idleSize.width
+        Group {
             if state == .expanded {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(snapshot?.title ?? "Not Playing")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .matchedGeometryEffect(id: GeometryIDs.title, in: namespace)
-                    Text(snapshot?.artist ?? "")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
-                        .lineLimit(1)
-                    WaveformSeekBar()
+                expanded(snapshot)
+            } else {
+                CompactWingLayout(notchWidth: notchWidth) {
+                    art(snapshot, side: 18)
+                        .matchedGeometryEffect(id: GeometryIDs.art, in: namespace)
+                } right: {
+                    CompactWaveformView()
                         .matchedGeometryEffect(id: GeometryIDs.waveform, in: namespace)
-                    transport
-                    if session.settings.ratings {
-                        RatingsQueueView()
-                    }
                 }
-            } else if state == .compact {
-                Text(snapshot?.title ?? "")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .opacity(0)
-                    .frame(width: 0, height: 0)
-                    .matchedGeometryEffect(id: GeometryIDs.title, in: namespace)
-                    .accessibilityHidden(true)
-                CompactWaveformView()
-                    .matchedGeometryEffect(id: GeometryIDs.waveform, in: namespace)
             }
         }
         .animation(.easeInOut(duration: MotionConstants.colorBleedDuration), value: snapshot?.persistentID)
-        .animation(.easeInOut(duration: MotionConstants.colorBleedDuration), value: snapshot?.accent)
         .onAppear(perform: syncPolling)
         .onDisappear {
             session.music.stopPositionPolling()
@@ -55,9 +34,29 @@ struct NowPlayingView: View {
         }
     }
 
+    private func expanded(_ snapshot: NowPlayingSnapshot?) -> some View {
+        HStack(spacing: 12) {
+            art(snapshot, side: 64)
+                .matchedGeometryEffect(id: GeometryIDs.art, in: namespace)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(snapshot?.title ?? "Not Playing")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .matchedGeometryEffect(id: GeometryIDs.title, in: namespace)
+                Text(snapshot?.artist ?? "")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .lineLimit(1)
+                WaveformSeekBar()
+                    .matchedGeometryEffect(id: GeometryIDs.waveform, in: namespace)
+                transport
+            }
+        }
+    }
+
     @ViewBuilder
-    private func art(_ snapshot: NowPlayingSnapshot?) -> some View {
-        let side: CGFloat = session.island.visualState == .expanded ? 92 : 22
+    private func art(_ snapshot: NowPlayingSnapshot?, side: CGFloat) -> some View {
         let colors = snapshot?.fallbackGradient ?? ArtworkFallback.gradient(artist: "", album: "idle")
         ZStack {
             LinearGradient(
@@ -65,32 +64,18 @@ struct NowPlayingView: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            RadialGradient(
-                colors: [
-                    (snapshot?.accent ?? colors[0]).opacity(0.45),
-                    Color.clear
-                ],
-                center: .topLeading,
-                startRadius: 2,
-                endRadius: side
-            )
-            .blendMode(.plusLighter)
             if let image = snapshot?.artwork {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
-                    .transition(.opacity)
-                    .id(snapshot?.persistentID)
             }
         }
         .frame(width: side, height: side)
         .clipShape(RoundedRectangle(cornerRadius: side * 0.28, style: .continuous))
-        .shadow(color: (snapshot?.accent ?? colors[0]).opacity(0.55), radius: session.island.visualState == .expanded ? 14 : 5)
-        .animation(.easeInOut(duration: MotionConstants.colorBleedDuration), value: snapshot?.persistentID)
     }
 
     private var transport: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 16) {
             Button(action: session.music.previousTrack) {
                 Image(systemName: "backward.fill")
             }
@@ -103,7 +88,7 @@ struct NowPlayingView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.white)
-        .font(.system(size: 14, weight: .semibold))
+        .font(.system(size: 13, weight: .semibold))
     }
 
     private func syncPolling() {
